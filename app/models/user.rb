@@ -26,43 +26,81 @@ class User < ActiveRecord::Base
   )
 
   def completed_polls
-    # data = Poll.find_by_sql([<<-SQL, self.id])
-    #   SELECT
-    #     polls.*,
-    #     COALESCE(COUNT(questions.id), 0) AS question_count
-    #   FROM
-    #     polls
-    #   LEFT OUTER JOIN
-    #     questions ON questions.poll_id = polls.id
-    #   LEFT OUTER JOIN
-    #     answer_choices ON questions.id = answer_choices.question_id
-    #   JOIN
-    #     (
-    #       SELECT
-    #         responses.*
-    #       FROM
-    #         responses
-    #       JOIN
-    #         users ON users.id = responses.user_id
-    #     ) AS user_responses
-    #   ON user_responses.answer_choice_id = answer_choices.id
-    #   WHERE
-    #     user_responses.user_id = ?
-    #   GROUP BY
-    #     polls.id
-    #   HAVING
-    #     COUNT(questions.id) = COUNT(user_responses.id)
-    # SQL
-    # p data
+    Poll.find_by_sql([<<-SQL, self.id])
+      SELECT
+        polls.*
+      FROM
+        polls
+      LEFT OUTER JOIN
+        questions ON questions.poll_id = polls.id
+      LEFT OUTER JOIN
+        answer_choices ON questions.id = answer_choices.question_id
+      LEFT OUTER JOIN
+        (
+          SELECT
+            responses.*
+          FROM
+            responses
+          JOIN
+            users ON users.id = responses.user_id
+          WHERE
+            users.id = ?
+        ) AS user_responses
+      ON user_responses.answer_choice_id = answer_choices.id
+      GROUP BY
+        polls.id
+      HAVING
+        COUNT(DISTINCT questions.id) = COUNT(DISTINCT user_responses.id)
+    SQL
 
-    data = Poll.joins('LEFT OUTER JOIN questions ON questions.poll_id = polls.id')
-      .joins('LEFT OUTER JOIN answer_choices' +
-      ' ON questions.id = answer_choices.question_id')
-      .joins('JOIN responses ON answer_choices.id = responses.answer_choice_id')
-      .where('responses.user_id = ?', self.id)
-      .group('polls.id')
-      .having('COUNT(questions.id) = COUNT(responses.id)')
+    # sub = Response.joins('JOIN users ON users.id = responses.user_id')
+    #   .where('users.id = ?', self.id).select('responses.*')
+
+    # Poll.joins('LEFT OUTER JOIN questions ON questions.poll_id = polls.id')
+    #   .joins('LEFT OUTER JOIN answer_choices ON questions.id = answer_choices.question_id')
+    #   .joins('JOIN (SELECT responses.* FROM responses JOIN users ON users.id = responses.user_id
+    #          WHERE users.id = ?) AS user_responses ON answer_choices.id = user_responses.answer_choice_id', self.id)
+    # .group('polls.id')
+    # .having('COUNT(DISTINCT questions.id) = COUNT(DISTINCT user_responses.id)')
 
 
+  end
+
+  def uncompleted_polls
+
+    Poll.find_by_sql([<<-SQL, self.id])
+      SELECT
+        polls.*
+      FROM
+        polls
+      LEFT OUTER JOIN
+        questions ON questions.poll_id = polls.id
+      LEFT OUTER JOIN
+        answer_choices ON questions.id = answer_choices.question_id
+      LEFT OUTER JOIN
+        (
+          SELECT
+            responses.*
+          FROM
+            responses
+          JOIN
+            users ON users.id = responses.user_id
+          WHERE
+            users.id = ?
+        ) AS user_responses
+      ON user_responses.answer_choice_id = answer_choices.id
+      GROUP BY
+        polls.id
+      HAVING
+        COUNT(DISTINCT questions.id) != COUNT(DISTINCT user_responses.id) AND
+        COUNT(DISTINCT user_responses.id) != 0
+    SQL
+    # data = Poll.joins('LEFT OUTER JOIN questions ON questions.poll_id = polls.id')
+    #   .joins('LEFT OUTER JOIN answer_choices' +
+    #   ' ON questions.id = answer_choices.question_id')
+    #   .joins('JOIN responses ON answer_choices.id = responses.answer_choice_id')
+    #   .where('responses.user_id = ?', self.id)
+    #   .group('polls.id')
+    #   .having('COALESCE(COUNT(questions.id), 0) != COALESCE(COUNT(responses.id), 0)')
   end
 end
